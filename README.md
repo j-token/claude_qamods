@@ -59,7 +59,7 @@ Claude's question dialog shows a question and a few short options. After a long 
 
 - **Claude Code 2.1.286 or later.** The mod uses the function-hooks plugin API, which is **early access** and may change between releases.
 - A terminal, preferably in fullscreen mode. The pane opens on its own when the terminal is at least **144 columns** wide. `/qa-guide` opens it at any width.
-- The pane labels support **English and Japanese**. AI explanations are written in **the language Claude Code answers you in**, whatever it is. Both are chosen automatically by default; see [Usage](#usage).
+- The pane labels support **English, Japanese and Korean**. AI explanations are written in **the language Claude Code answers you in**, whatever it is. Both are chosen automatically by default; see [Usage](#usage).
 
 ## Install
 
@@ -78,13 +78,13 @@ To update, run `/plugin marketplace update claude-qamods` and then `/plugin upda
 
 When Claude asks a question, the pane opens next to the dialog. Answer in the dialog as usual.
 
-The default language option is `auto`. A question or option label containing hiragana or katakana selects Japanese pane labels; otherwise, the labels use English. Chinese text alone selects English. Each history entry keeps the language chosen when it was created; entries saved by older versions stay Japanese.
+The default language option is `auto`. A question or option label containing Hangul selects Korean pane labels; otherwise, hiragana or katakana selects Japanese; otherwise, the labels use English. Hangul wins over kana, because a Korean question may quote a Japanese label. Chinese text alone selects English. Each history entry keeps the language chosen when it was created; entries saved by older versions stay Japanese.
 
 The AI explanation does not follow the pane labels. With `auto`, it is written in Claude Code's own language setting (`language` in `/config`, for example `Korean` or `ko`), so it matches how Claude answers you. When that setting is empty or `auto`, the explanation uses the language of your recent instructions. Each history entry keeps its explanation language, including for **Full context** re-runs.
 
 ![The same session switching to Japanese for a question asked in Japanese](docs/images/language-switch.png)
 
-Run `/config` and set qa-guide's `language` option to `en` or `ja` to fix both the labels and the explanation to that language, or `auto` to restore automatic selection. Before any question exists, automatic selection uses Claude Code's language setting when available (Japanese selects Japanese; other languages select English), then the locale (`LC_ALL`, or `LANG` when `LC_ALL` is empty). A locale starting with `ja` selects Japanese; otherwise, the fallback is English.
+Run `/config` and set qa-guide's `language` option to `en`, `ja` or `ko` to fix both the labels and the explanation to that language, or `auto` to restore automatic selection. Before any question exists, automatic selection uses Claude Code's language setting when available (Japanese selects Japanese, Korean selects Korean; other languages select English), then the locale (`LC_ALL`, or `LANG` when `LC_ALL` is empty). A locale starting with `ja` selects Japanese and one starting with `ko` selects Korean; otherwise, the fallback is English.
 
 ![A compact-context explanation with the Full context button](docs/images/compact-context.png)
 
