@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-05
+
 ### Added
 
 - Korean pane labels and a Korean explanation template; `language` accepts `ko`
