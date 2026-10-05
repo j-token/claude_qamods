@@ -26,7 +26,7 @@ export type QaQuestion = {
 export type QaEntry = {
   id: string
   /** Pane label language; the explanation itself may use any language. */
-  lang: 'en' | 'ja'
+  lang: 'en' | 'ja' | 'ko'
   /** Language the explanation is written in; absent means the user's own. */
   replyLanguage?: string
   askedAt: number
