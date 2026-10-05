@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- AI explanations are written in Claude Code's own `language` setting (any language, for example Korean), or in the language of your recent instructions when it is unset; the pane labels still use English or Japanese
+- Kana in an option label, or a question without kana, no longer forces a Japanese or English explanation
+- The `en` / `ja` option fixes the explanation language as well as the labels
+
 ## [0.4.0] - 2026-10-05
 
 ### Added

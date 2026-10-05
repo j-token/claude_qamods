@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Engine, MockClock } from 'claude-code/testing'
 import type { ConfigRow, ModelCompleteRequest, ModelCompleteResult, ModelForkResult, ModelUsage, On, PaneOpenArgs, PromptOrigin, PromptSubmitInput, RenderPropsOf, SessionMessage, ToolCallResult, UiScrollArgs } from 'claude-code'
 
-import { buildCompactContext, openQuestionPane } from './register'
+import { buildCompactContext, openQuestionPane, replyLanguageName } from './register'
 import { estimateCost, formatCost, resolvePrice } from './pricing'
 import type { QaEntry } from '../types'
 
@@ -36,7 +36,7 @@ for (const { name, question, labels, lang } of DETECTION_CASES) {
     await calls.clock.settle()
     expect(calls.savedEntries[0]).toHaveProperty('lang', lang)
     expect(calls.opened).toEqual([{ id: 'qa-guide', title: lang === 'ja' ? '質問ガイド' : 'Question guide' }])
-    expect(calls.languageLookups).toEqual([])
+    expect(calls.languageLookups).toEqual(['config'])
     expect(calls.completePrompts[0]).toContain(lang === 'ja' ? '### いまの指示（概要）' : '### Current instructions')
   })
 }
@@ -50,7 +50,7 @@ test('automatic language ignores kana in headers, descriptions, previews and con
   await calls.clock.settle()
   expect(calls.savedEntries[0]).toHaveProperty('lang', 'en')
   expect(calls.completePrompts[0]).toContain('### Current instructions')
-  expect(calls.languageLookups).toEqual([])
+  expect(calls.languageLookups).toEqual(['config'])
 })
 
 type Questions = Array<{
@@ -2794,7 +2794,7 @@ test('English placement toast uses the question language instead of Japanese fal
   await calls.clock.settle()
   expect(calls.opened).toEqual([{ id: 'qa-guide', title: 'Question guide' }])
   expect(calls.toast).toEqual(['Question guide: use /qa-guide to view context and option details'])
-  expect(calls.languageLookups).toEqual([])
+  expect(calls.languageLookups).toEqual(['config'])
 })
 
 test('legacy entries without lang retain Japanese UI even under an English override', { options: { language: 'en' } }, async ($, on) => {
@@ -2852,7 +2852,7 @@ test('bilingual history retains each entry language after explanation updates an
     await ui.press({ key: 'hist' })
     await ui.unmount()
   }
-  expect(calls.languageLookups).toEqual([])
+  expect(calls.languageLookups).toEqual(['config', 'config'])
 })
 
 const SHORT_ENGLISH_EXPLANATION: ModelCompleteResult = {
@@ -2924,7 +2924,7 @@ for (const [name, questions, lang] of [
     await calls.clock.settle()
     expect(calls.savedEntries[0]?.lang).toBe(lang)
     expect(calls.opened).toEqual([{ id: 'qa-guide', title: lang === 'en' ? 'Question guide' : '質問ガイド' }])
-    expect(calls.languageLookups).toEqual([])
+    expect(calls.languageLookups).toEqual(['config'])
     expect(calls.completePrompts[0]).toContain(lang === 'en' ? '### Current instructions' : '### いまの指示（概要）')
   })
 }
@@ -3294,4 +3294,155 @@ test('compact context keeps every question and option label when previews are hu
   for (const text of ['Pick a layout?', 'Grid', 'List', 'Board', 'Pick a theme?', 'Dark', 'Light', 'Simple list', 'Kanban board']) {
     expect(prompt).toContain(text)
   }
+})
+
+const KOREAN_QUESTIONS: Questions = [{
+  question: '데모 앱에 어떤 데이터베이스를 쓸까요?',
+  header: 'DB',
+  multiSelect: false,
+  options: [
+    { label: 'SQLite', description: '설정 없이 바로 씁니다.' },
+    { label: 'PostgreSQL', description: '운영 환경과 같습니다.' },
+  ],
+}]
+
+const replyIn = (language: string) => `Write the entire explanation in ${language}, including the section headings`
+const REPLY_MATCH = "Write the entire explanation in the same natural language as the user's recent instructions above"
+
+for (const [value, name] of [
+  ['Korean', 'Korean'],
+  ['ko', 'Korean'],
+  ['ko-KR', 'Korean (South Korea)'],
+  ['ko_KR', 'Korean (South Korea)'],
+  ['한국어', '한국어'],
+  ['  Spanish  ', 'Spanish'],
+  ['ja', 'Japanese'],
+  ['', undefined],
+  ['auto', undefined],
+  ['AUTO', undefined],
+  [undefined, undefined],
+] satisfies Array<[string | undefined, string | undefined]>) {
+  test(`the explanation language for config ${JSON.stringify(value)} is ${JSON.stringify(name)}`, async () => {
+    expect(replyLanguageName(value)).toBe(name)
+  })
+}
+
+test('an unusually long configured language is shortened to one line', async () => {
+  const name = replyLanguageName(`Korean\n${'x'.repeat(200)}`) ?? ''
+  expect(name.length).toBeLessThanOrEqual(60)
+  expect(name).not.toContain('\n')
+  expect(name.startsWith('Korean x')).toBe(true)
+})
+
+test('a Korean Claude Code language makes the compact explanation Korean while labels stay English', { options: { language: 'auto' } }, async ($, on) => {
+  const calls = engineBeneath(on, {}, { configRows: [languageRow('Korean')], env: { LC_ALL: 'ja_JP.UTF-8', LANG: 'ja_JP.UTF-8' } })
+  await submit($, '데모 앱을 만들어 주세요.')
+  await ask($, KOREAN_QUESTIONS)
+  await calls.clock.settle()
+  expect(calls.savedEntries[0]).toMatchObject({ lang: 'en', replyLanguage: 'Korean' })
+  const prompt = calls.completePrompts[0] ?? ''
+  expect(prompt).not.toContain('English Markdown')
+  // The rule is the request's last line, after every quoted field.
+  expect(prompt.split('\n').at(-1)).toContain(replyIn('Korean'))
+  expect(prompt).not.toContain(REPLY_MATCH)
+  expect(prompt.length).toBeLessThanOrEqual(12000)
+  expect(calls.languageLookups).toEqual(['config'])
+  for (const surface of SURFACES) {
+    const ui = await mountPane($, surface)
+    expect((await ui.find({ key: 'ai' }))?.props.label).toBe('AI explanation: ON')
+    await ui.unmount()
+  }
+})
+
+test('kana in an option label keeps Japanese labels but no longer makes the explanation Japanese', { options: { language: 'auto' } }, async ($, on) => {
+  const calls = engineBeneath(on, {}, { configRows: [languageRow('Korean')] })
+  await ask($, [{ ...KOREAN_QUESTIONS[0]!, options: [{ label: 'キャンバス', description: '' }, { label: 'DOM', description: '' }] }])
+  await calls.clock.settle()
+  expect(calls.savedEntries[0]).toMatchObject({ lang: 'ja', replyLanguage: 'Korean' })
+  const prompt = calls.completePrompts[0] ?? ''
+  expect(prompt).toContain('### いまの指示（概要）')
+  expect(prompt).not.toContain('日本語の Markdown')
+  expect(prompt.split('\n').at(-1)).toContain('解説全体を節の見出しも含めて Korean で書いてください')
+  for (const surface of SURFACES) {
+    const ui = await mountPane($, surface)
+    expect((await ui.find({ key: 'ai' }))?.props.label).toBe('AI解説: ON')
+    await ui.unmount()
+  }
+})
+
+for (const [name, options] of [
+  ['no config language', {}],
+  ['an automatic config language', { configRows: [languageRow('auto')] }],
+  ['an unavailable config', { configThrows: true }],
+] satisfies Array<[string, EngineOptions]>) {
+  test(`with ${name} the explanation follows the language of the user's own instructions`, { options: { language: 'auto' } }, async ($, on) => {
+    const calls = engineBeneath(on, {}, { ...options, env: { LC_ALL: 'en_US.UTF-8' } })
+    await submit($, '데모 앱을 만들어 주세요.')
+    await ask($, KOREAN_QUESTIONS)
+    await calls.clock.settle()
+    expect(calls.savedEntries[0]).toHaveProperty('lang', 'en')
+    expect(calls.savedEntries[0]).not.toHaveProperty('replyLanguage')
+    const prompt = calls.completePrompts[0] ?? ''
+    expect(prompt.split('\n').at(-1)).toContain(REPLY_MATCH)
+    expect(prompt).toContain('데모 앱을 만들어 주세요.')
+    // The terminal locale says nothing about the language the user writes in.
+    expect(calls.languageLookups).toEqual(['config'])
+  })
+}
+
+for (const language of ['en', 'ja'] as const) {
+  test(`the ${language} plugin option also fixes the explanation language over a Korean Claude Code setting`, { options: { language } }, async ($, on) => {
+    const calls = engineBeneath(on, {}, { configRows: [languageRow('Korean')] })
+    await ask($, KOREAN_QUESTIONS)
+    await calls.clock.settle()
+    const name = language === 'en' ? 'English' : 'Japanese'
+    expect(calls.savedEntries[0]).toMatchObject({ lang: language, replyLanguage: name })
+    expect(calls.completePrompts[0]).toContain(language === 'en' ? replyIn(name) : `${name} で書いてください`)
+    expect(calls.completePrompts[0]).not.toContain('Korean')
+    expect(calls.languageLookups).toEqual([])
+  })
+}
+
+test('full-context explanations carry the configured language from the start', { options: { language: 'auto', context: 'full' } }, async ($, on) => {
+  const calls = engineBeneath(on, {}, { configRows: [languageRow('ko')] })
+  await ask($, KOREAN_QUESTIONS)
+  await calls.clock.settle()
+  expect(calls.fork).toBe(1)
+  expect(calls.forkPrompts[0]?.split('\n').at(-1)).toContain(replyIn('Korean'))
+})
+
+test('a Full context rerun keeps the language stored with the question on both surfaces', { options: { language: 'auto' } }, async ($, on) => {
+  const options: EngineOptions = { configRows: [languageRow('Korean')], forkReply: { ...EXPLANATION, text: '전체 문맥 해설' } }
+  const calls = engineBeneath(on, {}, options)
+  await ask($, KOREAN_QUESTIONS)
+  await calls.clock.settle()
+  // A later settings change must not rewrite the language of an asked question.
+  options.configRows = [languageRow('French')]
+  for (const surface of SURFACES) {
+    const ui = await mountPane($, surface)
+    await ui.press({ key: 'deep' })
+    await calls.clock.settle()
+    expect(calls.forkPrompts.at(-1)?.split('\n').at(-1)).toContain(replyIn('Korean'))
+    await ui.unmount()
+  }
+  expect(calls.forkPrompts).toHaveLength(SURFACES.length)
+})
+
+test('the nothing-to-fork fallback keeps the language rule in its completion', { options: { language: 'auto', context: 'full' } }, async ($, on) => {
+  const calls = engineBeneath(on, {}, { configRows: [languageRow('Korean')], forkReply: { isAnswered: false, reason: 'nothing-to-fork' } })
+  await ask($, KOREAN_QUESTIONS)
+  await calls.clock.settle()
+  expect(calls.complete).toBe(1)
+  expect(calls.completePrompts[0]).toContain(replyIn('Korean'))
+})
+
+test('compact context stays within the cap with the language rule and huge fields', async () => {
+  const big = 'x'.repeat(20000)
+  const prompt = buildCompactContext([], [big, big, big], big, [{
+    question: big, header: 'Huge', multiSelect: false,
+    options: [{ label: 'Grid', description: big, preview: big }, { label: 'List', description: big }],
+  }], 'ja', 'Korean')
+  expect(prompt.length).toBeLessThanOrEqual(12000)
+  expect(prompt.split('\n').at(-1)).toContain('Korean で書いてください')
+  for (const label of ['Grid', 'List']) expect(prompt).toContain(label)
 })
