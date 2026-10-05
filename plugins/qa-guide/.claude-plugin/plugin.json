@@ -19,7 +19,7 @@
     "language": {
       "type": "string",
       "title": "Language",
-      "description": "Language for pane labels and AI explanations (auto detects each question).",
+      "description": "Language for pane labels and AI explanations (auto: labels per question, explanations in Claude Code's language).",
       "options": [
         "auto",
         "en",
