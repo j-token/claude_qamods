@@ -4,11 +4,18 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-05
+
+### Added
+
+- Korean pane labels and a Korean explanation template; `language` accepts `ko`
+- Automatic selection picks Korean labels for Hangul in a question or option label (before kana), and for a Korean Claude Code language or `ko` locale before any question exists
+
 ### Changed
 
-- AI explanations are written in Claude Code's own `language` setting (any language, for example Korean), or in the language of your recent instructions when it is unset; the pane labels still use English or Japanese
+- AI explanations are written in Claude Code's own `language` setting (any language, for example Korean), or in the language of your recent instructions when it is unset
 - Kana in an option label, or a question without kana, no longer forces a Japanese or English explanation
-- The `en` / `ja` option fixes the explanation language as well as the labels
+- The `en` / `ja` / `ko` option fixes the explanation language as well as the labels
 
 ## [0.4.0] - 2026-10-05
 
